@@ -2,3 +2,4 @@ weather:
   apikey: replaceme
   latitude: 0.0
   longitude: 0.0
+  interval: 60

@@ -1,0 +1,4 @@
+weather:
+  apikey: replaceme
+  latitude: 0.0
+  longitde: 0.0

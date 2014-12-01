@@ -40,7 +40,7 @@ class WeatherLogger():
 
     @defer.inlineCallbacks
     def UpdateWeather(self):
-        url = 'https://api.forecast.io/forecast/{0}/{2},{1}?exclude=minutely,hourly,daily'.format(self.apikey, self.latitude, self.longitude)
+        url = 'https://api.forecast.io/forecast/{0}/{2},{1}?exclude=minutely,hourly'.format(self.apikey, self.latitude, self.longitude)
         print "Updating Weather from", url
         response = yield self.agent.request('GET',url)
         
@@ -48,7 +48,16 @@ class WeatherLogger():
             body = yield self._GetBody(response)
             data = json.loads(body)
             current = data['currently']
-            print Stores.weather
+            
+            today = data['daily']['data'][0]
+
+            current['dayIcon'] = today['icon']
+            current['sunrise'] = today['sunriseTime']
+            current['sunsetTime'] = today['sunsetTime']
+            current['moonPhase'] = today['moonPhase']
+            current['temperatureMin'] = today['temperatureMin']
+            current['temperatureMax'] = today['temperatureMax']
+
             key = yield self.redis.AddDict(Stores.weather.value, current)
             yield self.redis.AddToTimeSeries(Stores.weather.value, key)
             yield self.redis.PublishKey(Stores.weather.value, key)

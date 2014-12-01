@@ -12,6 +12,8 @@ def Main():
 
     def start():
         log.startLogging(sys.stdout)
+        self.weather = WeatherLogger(self.config.settings)
+
         reactor.run()
         
 

@@ -29,6 +29,14 @@ class RedisClientWrapper():
         defer.returnValue(timestamp)
 
     @defer.inlineCallbacks
+    def GetLatestTimeSeriesMember(self, store):
+        key = yield self.redis.zrange(store + ':series', -1, -1)
+        item = None
+        if len(key) > 0:
+            item = yield self.redis.hgetall(key[0])
+        defer.returnValue(item)
+
+    @defer.inlineCallbacks
     def GetLastTimeSeriesMembers(self, store, minutes):
         items = []
         now = int(time.time())
@@ -70,6 +78,9 @@ if __name__=='__main__':
         print items
 
         yield client.PublishKey('TestStore',newid)
+
+        latest= yield client.GetLatestTimeSeriesMember('TestStore')
+        print latest
         reactor.stop()
     test()
 

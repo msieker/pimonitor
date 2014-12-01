@@ -35,8 +35,10 @@ class WeatherLogger():
     def _ConnectToRedis(self):
         yield self.redis.Connect()
         self.agent = Agent(reactor)
+
         self.monitortask = task.LoopingCall(self.UpdateWeather)
         self.monitortask.start(self.interval)
+
 
     @defer.inlineCallbacks
     def UpdateWeather(self):

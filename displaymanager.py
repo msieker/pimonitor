@@ -1,5 +1,6 @@
 import os
 import pygame
+import sys
 from pygame import Surface, Rect
 import time
 
@@ -10,6 +11,7 @@ from storenames import Stores
 
 class DisplayManager():
     screen = None
+    subscribedTo = [Stores.weather.value]
 
     def __init__(self, settings):
         self.settings = settings
@@ -19,8 +21,17 @@ class DisplayManager():
         self._Initialize()
 
     @defer.inlineCallbacks
+    def _GotMessage(self, args):
+        if args.channel == Stores.weather.value:
+            data = yield self.redis.GetDict(args.message)
+            print args.channel, args.message, data
+            self.currentconditions = data
+        pass
+
+    @defer.inlineCallbacks
     def _Initialize(self):
         yield self.redis.Connect()
+        yield self.redis.Subscribe(self._GotMessage, *self.subscribedTo)
         yield self._LoadInitialData()
 
         self._InitFrameBuffer()
@@ -70,7 +81,10 @@ class DisplayManager():
 
         self.screen.blit(self.surface, (0,0))
         pygame.display.update()
-        pass
+
+        if sys.stdin.read(1):
+            pygame.quit()
+            reactor.stop()
 
     def _InitFrameBuffer(self):
         drivers = ['fbcon','directfb','svgalib']
@@ -96,11 +110,11 @@ class DisplayManager():
 
         self.size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
         print 'Framebuffer size: %d x %d' % (self.size[0], self.size[1])
-
+        pygame.init()
         self.screen = pygame.display.set_mode(self.size, pygame.FULLSCREEN)
         self.surface = Surface(self.size, pygame.SRCALPHA)
         self.surface.fill((0,0,0))
-        pygame.font.init()
+
         self.font = pygame.font.SysFont('Droid Sans Mono', 9)
         pygame.mouse.set_visible(False)
         pygame.display.update()

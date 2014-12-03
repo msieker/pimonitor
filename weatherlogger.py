@@ -18,7 +18,6 @@ class ResponseReader(protocol.Protocol):
         
 
 class WeatherLogger():
-
     def __init__(self, settings):
         self.settings = settings
         self.redis = RedisClientWrapper(self.settings)
@@ -38,7 +37,6 @@ class WeatherLogger():
 
         self.monitortask = task.LoopingCall(self.UpdateWeather)
         self.monitortask.start(self.interval)
-
 
     @defer.inlineCallbacks
     def UpdateWeather(self):

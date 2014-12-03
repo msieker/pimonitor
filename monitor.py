@@ -5,15 +5,15 @@ from twisted.python import log
 
 from configuration import Configuration
 from weatherlogger import WeatherLogger
-
-def Main():
+from displaymanager import DisplayManager
+class Main():
     def __init__(self):
         self.config = Configuration()
 
-    def start():
+    def start(self):
         log.startLogging(sys.stdout)
         self.weather = WeatherLogger(self.config.settings)
-
+        self.display  = DisplayManager(self.config.settings)
         reactor.run()
         
 

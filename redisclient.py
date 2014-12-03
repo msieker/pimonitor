@@ -1,7 +1,23 @@
 import time
-
+import collections
 from twisted.internet import reactor, protocol, defer
-from txredis.client import RedisClient
+from txredis.client import RedisClient, RedisSubscriber
+
+MessageCallbackArgs = collections.namedtuple('MessageCallbackArgs',['channel','message'])
+
+class RedisCallbackSubscriber(RedisSubscriber):
+    def __init__(self, *args, **kwargs):
+        RedisSubscriber.__init__(self,*args,**kwargs)
+        self.callback = None
+        
+    def channelSubscribed(self, channel, numSubscriptions):
+        print 'subscribed',channel
+                              
+    def messageReceived(self, channel, message):
+        print 'got message',channel, message       
+        args = MessageCallbackArgs(channel.replace(':pubsub',''), message)
+        self.callback(args)
+
 
 class RedisClientWrapper():
     def __init__(self, settings):
@@ -21,6 +37,11 @@ class RedisClientWrapper():
         newkey = store + ':' + str(thisid)
         yield self.redis.hmset(newkey, data)
         defer.returnValue(newkey)
+
+    @defer.inlineCallbacks
+    def GetDict(self, key):
+        result = yield self.redis.hgetall(key)
+        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def AddToTimeSeries(self, store, key):
@@ -51,12 +72,23 @@ class RedisClientWrapper():
     def PublishKey(self, store, key):
         yield self.redis.publish(store + ':pubsub', key)
 
-    def Subscribe(self, *channels):
-        pass
+    @defer.inlineCallbacks
+    def Subscribe(self, callback, *channels):
+        factory = protocol.ClientCreator(reactor, RedisCallbackSubscriber)
+        print 'Connecting to redis at {0}:{1}'.format(self.server, self.port)
+        subscriber = yield factory.connectTCP(self.server, self.port)
+
+        massaged = [c + ':pubsub' for c in channels]
+        print massaged
+        subscriber.subscribe(*massaged)
+        subscriber.callback =callback
+        #subscriber.deferred.addCallback(callback)
 
 if __name__=='__main__':
     from configuration import Configuration
 
+    def callback(args):
+        print 'got callback'
 
     @defer.inlineCallbacks
     def test():
@@ -68,6 +100,7 @@ if __name__=='__main__':
         result = yield client.redis.ping()
         print result
 
+        yield client.Subscribe(callback,'TestStore')
         newid = yield client.AddDict('TestStore', {'testkey1':42, 'testkey2':'test', 'added': int(time.time())})
         print newid
 

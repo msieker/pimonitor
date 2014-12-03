@@ -1,3 +1,4 @@
+#!/usr/bin/env suid-python
 import sys
 import time
 import Adafruit_DHT
@@ -49,7 +50,6 @@ class SensorMonitor():
         key = yield self.redis.AddDict(Stores.sensor.value, store)
         yield self.redis.AddToTimeSeries(Stores.sensor.value, key)
         yield self.redis.PublishKey(Stores.sensor.value, key)
-        print store
 
     def SensorRead(self, info):
         self.buffer.append(info)
@@ -69,5 +69,5 @@ if __name__ == '__main__':
         config = Configuration()
         sensor = SensorMonitor(config.settings)
         pass
-test()
-reactor.run()
+    test()
+    reactor.run()

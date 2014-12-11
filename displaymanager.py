@@ -9,6 +9,9 @@ from twisted.internet import task, reactor, defer, protocol
 from redisclient import RedisClientWrapper
 from storenames import Stores
 
+def c_to_f(c):
+    return c* 9.0 / 5.0 + 32.0
+
 class DisplayManager():
     screen = None
     subscribedTo = [Stores.weather.value, Stores.sensor.value]
@@ -36,7 +39,7 @@ class DisplayManager():
 
         self._InitFrameBuffer()
         self.screenupdatetask = task.LoopingCall(self.UpdateDisplay)
-        self.screenupdatetask.start(0.5)
+        self.screenupdatetask.start(0.25)
 
     @defer.inlineCallbacks
     def _LoadInitialData(self):
@@ -65,16 +68,17 @@ class DisplayManager():
 
     def _DrawCurrentConditions(self):
         lines = [self.currentconditions['summary'],
-                 "Temp:  " + self.currentconditions['temperature'], 
-                 "Humid: " + self.currentconditions['humidity'], 
-                 "Press: " + self.currentconditions['pressure']]
+                 "Temp:  " + str(self.currentconditions['temperature']), 
+                 "Humid: " + str(self.currentconditions['humidity']), 
+                 "Press: " + str(self.currentconditions['pressure'])]
         return self._DrawTextLines(lines)
+
 
     def _DrawSensors(self):
         lines = ['Indoor Conditions',
-                 'Temp:  ' + self.sensors['temperature'],
-                 'Humid: ' + self.sensors['humidity'],
-                 '']
+                 'Temp:  ' + str(c_to_f(float(self.sensors['temperature']))),
+                 'Humid: ' + str(self.sensors['humidity']),
+                 ' ']
         return self._DrawTextLines(lines)
 
     def UpdateDisplay(self):
@@ -82,19 +86,19 @@ class DisplayManager():
         text = self.font.render(datedisplay, 1, (255,255,255))
         textpos = text.get_rect()
 
-        self.surface.fill((0,0,0))
-        self.surface.blit(text,(0,0))
+        self.screen.fill((0,0,0))
+        self.screen.blit(text,(0,0))
 
         current = self._DrawCurrentConditions()
-        top = self.surface.get_rect().height - current.get_rect().height
-        self.surface.blit(current,(0,top))
+        top = self.screen.get_rect().height - current.get_rect().height
+        self.screen.blit(current,(0,top))
 
         current = self._DrawSensors()
-        top = self.surface.get_rect().height - current.get_rect().height
-        left = self.surface.get_rect().width - current.get_rect().width
-        self.surface.blit(current,(left,top))
+        top = self.screen.get_rect().height - current.get_rect().height
+        left = self.screen.get_rect().width - current.get_rect().width
+        self.screen.blit(current,(left,top))
 
-        self.screen.blit(self.surface, (0,0))
+#        self.screen.blit(self.surface, (0,0))
         pygame.display.update()
 
 
@@ -105,13 +109,12 @@ class DisplayManager():
         self.surface = Surface(self.size, pygame.SRCALPHA)
         self.surface.fill((0,0,0))
 
-        self.font = pygame.font.SysFont('Droid Sans Mono', 9)
+        self.font = pygame.font.SysFont('Droid Sans Mono', 11)
         pygame.mouse.set_visible(False)
         pygame.display.update()
 
 if __name__ == '__main__':
     from configuration import Configuration
-
 
 #    @defer.inlineCallbacks
     def test():

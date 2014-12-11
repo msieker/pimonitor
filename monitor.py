@@ -10,6 +10,7 @@ from configuration import Configuration
 from weatherlogger import WeatherLogger
 from displaymanager import DisplayManager
 from sensormonitor import SensorMonitor
+from webserver import WebServer
 
 class Main():
     def __init__(self):
@@ -51,7 +52,7 @@ class Main():
         self.weather = WeatherLogger(self.config.settings)
         self.display = DisplayManager(self.config.settings)
         self.sensors = SensorMonitor(self.config.settings)
-
+        self.server = WebServer(self.config.settings)
         lc = LoopingCall(self.process_event)
         lc.start(0.25)
         reactor.run()

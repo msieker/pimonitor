@@ -2,6 +2,7 @@
 import sys
 import time
 import Adafruit_DHT
+import Adafruit_MCP9808.MCP9808 as MCP9808
 from collections import namedtuple, deque
 
 from twisted.internet import task, reactor, defer, protocol, threads
@@ -19,12 +20,15 @@ class SensorMonitor():
         self.pin = self.settings['sensor']['gpio']
         sensortype = self.settings['sensor']['type']
         self.sensor = self.sensormap[sensortype]
+        self.tempSensor = MCP9808.MCP9808()
         self.pollinterval = self.settings['sensor']['pollinterval']
         self.updateinterval = self.settings['sensor']['updateinterval']
         self.averages = self.settings['sensor']['averages']
 
         self.buffer = deque(maxlen=self.averages)
         self.redis = RedisClientWrapper(settings)
+
+        self.tempSensor.begin()
 
         self._Initialize()
 
@@ -61,6 +65,7 @@ class SensorMonitor():
 
     def Read(self):
         humidity, temp = Adafruit_DHT.read_retry(self.sensor, self.pin)
+        temp = self.tempSensor.readTempC()
         return SensorInfo(temp,humidity)
 
 if __name__ == '__main__':

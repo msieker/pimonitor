@@ -1,23 +1,59 @@
 import time
 import collections
 from twisted.internet import reactor, protocol, defer
-from txredis.client import RedisClient, RedisSubscriber
+from twisted.internet.protocol import ClientCreator
+#from txredis.client import RedisClient, RedisSubscriber
+import msgpack
+
+import txredisapi as redis
 
 MessageCallbackArgs = collections.namedtuple('MessageCallbackArgs',['channel','message'])
 
-class RedisCallbackSubscriber(RedisSubscriber):
-    def __init__(self, *args, **kwargs):
-        RedisSubscriber.__init__(self,*args,**kwargs)
-        self.callback = None
+timeseries = """local data = {}
+local hashes = redis.call('zrangebyscore', KEYS[1], ARGV[1], ARGV[2])
+local i = 1
+while(i<=#hashes) do
+   local raw_hash = redis.call('hgetall', hashes[i])
+   local hash = {}
+   local hi = 1
+
+   while(hi<=#raw_hash) do
+      hash[raw_hash[hi]] = raw_hash[hi+1]
+      hi=hi+2
+   end
+   data[i] =hash
+   i=i+1
+end
+
+return cmsgpack.pack(data)"""
+
+class RedisCallbackSubscriber(redis.SubscriberProtocol):
+    gotMessageCallback = None
+
+    def setMessageCallback(self, cb):
+        self.gotMessageCallback = cb
         
     def channelSubscribed(self, channel, numSubscriptions):
-        print 'subscribed',channel
-                              
-    def messageReceived(self, channel, message):
-        print 'got message',channel, message       
-        args = MessageCallbackArgs(channel.replace(':pubsub',''), message)
-        self.callback(args)
+        pass
 
+    def messageReceived(self, pattern, channel, message):
+
+        args = MessageCallbackArgs(channel.replace(':pubsub',''), message)
+        self.gotMessageCallback(args)
+
+class RedisCallbackFactory(redis.SubscriberFactory):
+    maxDelay = 120
+    continueTrying = True
+    protocol = RedisCallbackSubscriber
+
+    def __init__(self, callback):
+        redis.SubscriberFactory.__init__(self)
+        self.callback = callback
+
+    def buildProtocol(self, addr):
+        p = redis.SubscriberFactory.buildProtocol(self,addr)
+        p.setMessageCallback(self.callback)
+        return p
 
 class RedisClientWrapper():
     def __init__(self, settings):
@@ -27,9 +63,7 @@ class RedisClientWrapper():
 
     @defer.inlineCallbacks
     def Connect(self):
-        factory = protocol.ClientCreator(reactor, RedisClient)
-        print 'Connecting to redis at {0}:{1}'.format(self.server, self.port)
-        self.redis = yield factory.connectTCP(self.server, self.port)
+        self.redis = yield redis.ConnectionPool(self.server, self.port)
 
     @defer.inlineCallbacks
     def AddDict(self, store, data):
@@ -62,11 +96,14 @@ class RedisClientWrapper():
         items = []
         now = int(time.time())
         start = now - (minutes * 60)
-        keys = yield self.redis.zrangebyscore(store + ':series', start, now)
-        for key in keys:
-            item = yield self.redis.hgetall(key)
-            items.append(item)
-        defer.returnValue(items)
+        packed = yield self.redis.eval(timeseries,[store + ':series'],[start,now])
+        unpacked = msgpack.unpackb(packed)
+        #keys = yield self.redis.zrangebyscore(store + ':series', start, now)
+        #for key in keys:
+        #    item = yield self.redis.hgetall(key)
+        #    items.append(item)
+        defer.returnValue(unpacked)
+        #defer.returnValue(items)
 
     @defer.inlineCallbacks
     def PublishKey(self, store, key):
@@ -74,15 +111,14 @@ class RedisClientWrapper():
 
     @defer.inlineCallbacks
     def Subscribe(self, callback, *channels):
-        factory = protocol.ClientCreator(reactor, RedisCallbackSubscriber)
-        print 'Connecting to redis at {0}:{1}'.format(self.server, self.port)
-        subscriber = yield factory.connectTCP(self.server, self.port)
+        factory = RedisCallbackFactory(callback)
+        reactor.connectTCP(self.server, self.port, factory)
+        subscriber = yield factory.deferred
 
         massaged = [c + ':pubsub' for c in channels]
-        print massaged
-        subscriber.subscribe(*massaged)
-        subscriber.callback =callback
-        #subscriber.deferred.addCallback(callback)
+
+        subscriber.subscribe(massaged)
+
 
 if __name__=='__main__':
     from configuration import Configuration
@@ -107,6 +143,7 @@ if __name__=='__main__':
         ts = yield client.AddToTimeSeries('TestStore', newid)
         print ts
 
+        print "GetLastTimeSeriesMembers"
         items = yield client.GetLastTimeSeriesMembers('TestStore', 5)
         print items
 

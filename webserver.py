@@ -9,9 +9,12 @@ from datetime import datetime
 from redisclient import RedisClientWrapper
 from storenames import Stores
 
-def renderCsvOrJson(data, request, jsonwrapper):
+def add_cors_header(request):
+    request.setHeader('Access-Control-Allow-Origin','*')
+
+def render_csv_or_json(data, request, jsonwrapper):
     accepts = request.getHeader('Accept')
-           
+    addCors(request)
     if 'application/json' in accepts:
         request.setHeader("Content-Type","application/json")
         jsonString = json.dumps({jsonwrapper:data})
@@ -36,12 +39,12 @@ class SensorHistory(Resource):
         self.settings = settings
         self.redis = redis    
 
-    def _DelayedRender(self, data, request):
+    def __delayed_render(self, data, request):
         for r in data:
             d = datetime.fromtimestamp(int(r['logged']))
             r['date'] = d.isoformat(' ')
 
-        renderCsvOrJson(data,request,'history')
+        render_csv_or_json(data,request,'history')
 
     def render_GET(self, request):
         minutes = 0
@@ -53,7 +56,7 @@ class SensorHistory(Resource):
             minutes += int(request.args['m'][0])
 
         d = self.redis.GetLastTimeSeriesMembers(Stores.sensor.value, minutes)
-        d.addCallback(self._DelayedRender, request=request)
+        d.addCallback(self.__delayed_render, request=request)
         return server.NOT_DONE_YET
 
 
@@ -63,12 +66,12 @@ class WeatherHistory(Resource):
         self.settings = settings
         self.redis = redis    
 
-    def _DelayedRender(self, data, request):
+    def __delayed_render(self, data, request):
         for r in data:
             d = datetime.fromtimestamp(int(r['time']))
             r['date'] = d.isoformat(' ')
 
-        renderCsvOrJson(data,request,'history')
+        render_csv_or_json(data,request,'history')
 
     def render_GET(self, request):
         minutes = 0
@@ -80,7 +83,7 @@ class WeatherHistory(Resource):
             minutes += int(request.args['m'][0])
 
         d = self.redis.GetLastTimeSeriesMembers(Stores.weather.value, minutes)
-        d.addCallback(self._DelayedRender, request=request)
+        d.addCallback(self.__delayed_render, request=request)
         return server.NOT_DONE_YET
     
 class WeatherRoot(Resource):
@@ -90,16 +93,16 @@ class WeatherRoot(Resource):
         self.redis = redis    
         self.putChild('history',WeatherHistory(settings, redis))        
 
-    def _DelayedRender(self, data, request):
+    def __delayed_render(self, data, request):
         request.setHeader("content-type","application/json")
-        
+        addCors(request)
         jsonString = json.dumps(data)
         request.write(jsonString)
         request.finish()
 
     def render_GET(self, request):
         d =self.redis.GetLatestTimeSeriesMember(Stores.weather.value)
-        d.addCallback(self._DelayedRender, request=request)
+        d.addCallback(self.__delayed_render, request=request)
         return server.NOT_DONE_YET
 
 
@@ -110,16 +113,16 @@ class SensorRoot(Resource):
         self.redis = redis    
         self.putChild('history',SensorHistory(settings, redis))        
 
-    def _DelayedRender(self, data, request):
+    def __delayed_render(self, data, request):
         request.setHeader("content-type","application/json")
-        
+        addCors(request)
         jsonString = json.dumps(data)
         request.write(jsonString)
         request.finish()
 
     def render_GET(self, request):
         d =self.redis.GetLatestTimeSeriesMember(Stores.sensor.value)
-        d.addCallback(self._DelayedRender, request=request)
+        d.addCallback(self.__delayed_render, request=request)
         return server.NOT_DONE_YET
 
 class ApiRoot(Resource):
@@ -150,7 +153,6 @@ class WebServer():
         self.settings = settings
         self.port = settings['web']['port']
         root = ApiRoot(self.settings)
-#        root.putChild('sensors', SensorRoot(self.settings))
         site = server.Site(root)
         reactor.listenTCP(self.port, site)
 

@@ -2,3 +2,5 @@ configuration.private.yaml
 *~
 *.pyc
 log.txt
+.#*
+#*#.*

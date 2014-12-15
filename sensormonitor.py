@@ -3,6 +3,7 @@ import sys
 import time
 import Adafruit_DHT
 import Adafruit_MCP9808.MCP9808 as MCP9808
+import Adafruit_BMP.BMP085 as BMP085
 from collections import namedtuple, deque
 
 from twisted.internet import task, reactor, defer, protocol, threads
@@ -10,7 +11,7 @@ from twisted.internet import task, reactor, defer, protocol, threads
 from redisclient import RedisClientWrapper
 from storenames import Stores
 
-SensorInfo = namedtuple('SensorInfo',['temperature','humidity'])
+SensorInfo = namedtuple('SensorInfo', ['temperature', 'humidity', 'pressure'])
 
 class SensorMonitor():
     sensormap = {'DHT11': Adafruit_DHT.DHT11}
@@ -29,28 +30,30 @@ class SensorMonitor():
         self.redis = RedisClientWrapper(settings)
 
         self.tempSensor.begin()
-
-        self._Initialize()
+        self.pressureSensor = BMP085.BMP085()
+        self.__initialize()
 
     @defer.inlineCallbacks
-    def _Initialize(self):
+    def __initialize(self):
         yield self.redis.Connect()
 
-        l = task.LoopingCall(self.LoopingRead)
+        l = task.LoopingCall(self.looping_read)
         l.start(self.pollinterval)
 
-        l = task.LoopingCall(self.PublishUpdate)
+        l = task.LoopingCall(self.publish_update)
         l.start(self.updateinterval, now=False)
 
-    def _CalcAverages(self):
-        avgtemp = reduce(lambda tot, i: tot+i.temperature,self.buffer,0) / len(self.buffer)
-        avghumid = reduce(lambda tot, i: tot+i.humidity,self.buffer,0) / len(self.buffer)
-        return SensorInfo(avgtemp,avghumid)
+    def __calc_averages(self):
+        avgtemp = reduce(lambda tot, i: tot + i.temperature, self.buffer,0) / len(self.buffer)
+        avghumid = reduce(lambda tot, i: tot + i.humidity, self.buffer,0) / len(self.buffer)
+        avgpressure = reduce(lambda tot, i: tot + i.pressure, self.buffer, 0) / len(self.buffer)
+        return SensorInfo(avgtemp, avghumid, avgpressure)
 
     @defer.inlineCallbacks
-    def PublishUpdate(self):
-        value = self._CalcAverages()
-        store = {'temperature': value.temperature, 'humidity': value.humidity, 'logged': int(time.time())}
+    def publish_update(self):
+        value = self.__calc_averages()
+        store = {'temperature': value.temperature, 'humidity': value.humidity, 'pressure': value.pressure, 'logged': int(time.time())}
+        print store
         key = yield self.redis.AddDict(Stores.sensor.value, store)
         yield self.redis.AddToTimeSeries(Stores.sensor.value, key)
         yield self.redis.PublishKey(Stores.sensor.value, key)
@@ -58,15 +61,16 @@ class SensorMonitor():
     def SensorRead(self, info):
         self.buffer.append(info)
         
-    def LoopingRead(self):
-        d = threads.deferToThread(self.Read)
+    def looping_read(self):
+        d = threads.deferToThread(self.read)
         d.addCallback(self.SensorRead)
         return d
 
-    def Read(self):
+    def read(self):
         humidity, temp = Adafruit_DHT.read_retry(self.sensor, self.pin)
         temp = self.tempSensor.readTempC()
-        return SensorInfo(temp,humidity)
+        pressure = self.pressureSensor.read_pressure()
+        return SensorInfo(temp, humidity, pressure)
 
 if __name__ == '__main__':
     from configuration import Configuration

@@ -4,3 +4,6 @@
 [submodule "Adafruit_Python_MCP9808"]
 	path = Adafruit_Python_MCP9808
 	url = https://github.com/adafruit/Adafruit_Python_MCP9808.git
+[submodule "Adafruit_Python_BMP"]
+	path = Adafruit_Python_BMP
+	url = git@github.com:adafruit/Adafruit_Python_BMP.git

@@ -75,10 +75,13 @@ class DisplayManager():
 
 
     def _DrawSensors(self):
+        pressure = 0
+        if 'pressure' in self.sensors:
+            pressure = float(self.sensors['pressure'])
         lines = ['Indoor Conditions',
                  'Temp:  ' + str(c_to_f(float(self.sensors['temperature']))),
                  'Humid: ' + str(self.sensors['humidity']),
-                 ' ']
+                 'Press: {0:0.2f}'.format(pressure/100)] #mbar
         return self._DrawTextLines(lines)
 
     def UpdateDisplay(self):
